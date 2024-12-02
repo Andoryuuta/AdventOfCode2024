@@ -4,8 +4,9 @@ Advent of Code 2024
 
 # Running specific day/solution
 ```bash
-$ go run ./cmd/day1/ ./challenge_data/day1/input_part1
-Total distance: 2742123
+$ go run ./cmd/day1/ ./challenge_data/day1/input_example
+Total distance: 11
+Similarity score: 31
 ```
 
 # Testing
