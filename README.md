@@ -1,5 +1,7 @@
 # AdventOfCode2024
-Advent of Code 2024 
+My hacky solutions Advent of Code 2024.
+
+Just for fun, don't expect quality. :D
 
 
 # Running specific day/solution
