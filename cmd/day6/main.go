@@ -75,11 +75,7 @@ func parseMap(reader io.Reader) (*PuzzleMap, error) {
 // simulateGuardPatrol simluates the guard patrol of the provided puzzle map.
 // Returns the distinct points walked by the guard, and whether the
 // guard entered an infinte loop.
-func simulateGuardPatrol(puzzleMap *PuzzleMap) (map[Point]bool, bool) {
-	trailLogKey := func(pos Point, dir Direction) string {
-		return fmt.Sprintf("%d-%d-%d", pos.Row, pos.Col, dir)
-	}
-
+func simulateGuardPatrol(puzzleMap *PuzzleMap) (map[Point]map[Direction]bool, bool) {
 	mapRuneAt := func(row int, col int) *rune {
 		if row >= 0 && row < len(puzzleMap.MapData) && col >= 0 && col < len(puzzleMap.MapData[row]) {
 			return &puzzleMap.MapData[row][col]
@@ -104,16 +100,17 @@ func simulateGuardPatrol(puzzleMap *PuzzleMap) (map[Point]bool, bool) {
 
 	curPosition := puzzleMap.GuardStartPosition
 	curDir := puzzleMap.GuardStartDirection
-	trailLog := make(map[string]bool)
-	seenPoints := make(map[Point]bool)
+	seenPoints := make(map[Point]map[Direction]bool)
 	infiniteLoop := false
 	for {
-		if trailLog[trailLogKey(curPosition, curDir)] {
+		if seenPoints[curPosition][curDir] {
 			infiniteLoop = true
 			break
 		}
-		trailLog[trailLogKey(curPosition, curDir)] = true
-		seenPoints[curPosition] = true
+		if _, ok := seenPoints[curPosition]; !ok {
+			seenPoints[curPosition] = make(map[Direction]bool)
+		}
+		seenPoints[curPosition][curDir] = true
 
 		nextPos := forwardPosition(curPosition, curDir)
 		nextPosRune := mapRuneAt(nextPos.Row, nextPos.Col)
@@ -141,42 +138,22 @@ func simulateGuardPatrol(puzzleMap *PuzzleMap) (map[Point]bool, bool) {
 	return seenPoints, infiniteLoop
 }
 
-// Literally brute-force currently.
-// TODO(Andoryuuta): Make a real solution before the day ends!
+// findAllLoopingOptions attempts to find all solutions points which would
+// cause the guard to enter an infinite loop if an obstruction was placed.
+//
+// This is partially bruteforce, as it has to test every possible point
+// that the guard would normally walk in the original puzzle input.
 func findAllLoopingOptions(puzzleMap *PuzzleMap) []Point {
 	// Simulate it once to get the list of points walked by the guard.
-	normallySeenPoints, _ := simulateGuardPatrol(puzzleMap)
-
-	// Create a map of possible obstruction points.
-	// We just add one for each cardinal direction from the point here,
-	// could by optimized by keeping track of seen directions for each point.
-	possibleObstructionPoints := make(map[Point]bool, len(normallySeenPoints)*5)
-	for point, _ := range normallySeenPoints {
-		possibleObstructionPoints[Point{point.Row, point.Col}] = true
-
-		// Up
-		if point.Row-1 >= 0 {
-			possibleObstructionPoints[Point{point.Row - 1, point.Col}] = true
-		}
-		// Down
-		if point.Row+1 < len(puzzleMap.MapData) {
-			possibleObstructionPoints[Point{point.Row + 1, point.Col}] = true
-		}
-		// Left
-		if point.Col-1 >= 0 {
-			possibleObstructionPoints[Point{point.Row, point.Col - 1}] = true
-		}
-		// Right
-		if len(puzzleMap.MapData) > 0 && point.Col+1 < len(puzzleMap.MapData[0]) {
-			possibleObstructionPoints[Point{point.Row, point.Col + 1}] = true
-		}
-	}
-	fmt.Printf("Testing %d possible obstruction points\n", len(possibleObstructionPoints))
+	possibleObstructionPoints, _ := simulateGuardPatrol(puzzleMap)
 
 	var loopCausingObstructions []Point
 	for point, _ := range possibleObstructionPoints {
-		// Only try to add obstructions where there aren't any existing, and not in the starting position.
-		isStartingPos := point.Row == puzzleMap.GuardStartPosition.Row && point.Col == puzzleMap.GuardStartPosition.Col
+		// Only try to add obstructions where there aren't any existing,
+		// and not in the original starting position of the guard.
+		isStartingPos := point.Row == puzzleMap.GuardStartPosition.Row &&
+			point.Col == puzzleMap.GuardStartPosition.Col
+
 		if puzzleMap.MapData[point.Row][point.Col] != '#' && !isStartingPos {
 			newPuzzleMap := &PuzzleMap{
 				MapData:             puzzleMap.MapData,
@@ -184,17 +161,16 @@ func findAllLoopingOptions(puzzleMap *PuzzleMap) []Point {
 				GuardStartDirection: puzzleMap.GuardStartDirection,
 			}
 
-			// We swap the rune in the map data, simulate, then put it back.
-			// This keeps us from having to deep copy the large map data for
-			// each possible solution.
+			// We add the obstruction in the map data, simluate, then put back
+			// the original rune. This keeps us from having to deep copy the
+			// map data for each possible solution.
 			originalRune := newPuzzleMap.MapData[point.Row][point.Col]
 			newPuzzleMap.MapData[point.Row][point.Col] = '#'
 			_, infiniteLoop := simulateGuardPatrol(newPuzzleMap)
 			newPuzzleMap.MapData[point.Row][point.Col] = originalRune
 
-			// fmt.Printf("point.Row:%d,point.Col:%d,distinctPositions:%d,loop:%v\n", point.Row, point.Col, len(distinctPositions), infiniteLoop)
 			if infiniteLoop {
-				loopCausingObstructions = append(loopCausingObstructions, Point{point.Row, point.Col})
+				loopCausingObstructions = append(loopCausingObstructions, point)
 			}
 		}
 	}
